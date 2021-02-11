@@ -26,6 +26,7 @@ from sklearn.metrics import confusion_matrix
 from mlxtend.plotting import plot_confusion_matrix
 
 
+
 # PARÁMETROS
 PRE_TRAINED_MODEL = "VGG16"
 IMG_SIZE = 48
@@ -37,14 +38,6 @@ BATCH = 64
 LEARNING_RATE = 0.0005
 DECAY = 1e-5
 PATIENCE = 50
-
-# PARÁMETROS CONVOLUCIÓN
-NUM_CONV1 = 32
-NUM_CONV2= 64
-NUM_CONV3= 128
-NUM_CONV4 = 128
-TAM_FILTER = (3,3)
-
 
 # DIRECCTORIOS
 CSV_FILE= 'dataset.csv'
@@ -98,10 +91,10 @@ class myCallback(tf.keras.callbacks.Callback):
         
         
                 
-# FUNCIONES
+#FUNCIONES
 def load_data(csv_dir):
-    # CARGAR DATOS DEL CSV
-    # Todos los datos
+    ### CARGAR DATOS DEL CSV
+    # Todo los datos
     print('Comienza la importación de los datos')
     # Análisis de los datos
     data_csv = pd.read_csv(csv_dir, header=0)
@@ -136,8 +129,8 @@ def create_images_array(pixels_list):
 
 
 def apply_PreTrained_model(model,data):
-    # Se crea el modelo pre entrenado seleccionado 
-    # include_top=False no incluye las ultimas capas Softmax
+    #Se crea el modelo pre entrenado selecionado 
+    #include_top=False no incluye las ultimas capas softmax
     if model== "VGG16":
         CNN_model = VGG16(include_top=False, input_shape=(48, 48, 3), pooling='avg', weights='imagenet')  
            
@@ -145,20 +138,26 @@ def apply_PreTrained_model(model,data):
         CNN_model = VGG19(include_top=False, input_shape=(48, 48, 3), pooling='avg', weights='imagenet')
             
     result = CNN_model.predict(data)       
-    # Se aplica a los datos y se retorna el modelo para contruir el modelo final completo      
+    #Se aplica a los datos y se retorna el modelo para contruir el modelo final completo      
     return result, CNN_model
 
     
 def main(): 
     # Obtenemos dos numpy array con las emociones y las imagenes en orden
     emotion_array_np, images_array_np  = load_data(CSV_FILE)
+    
+    # Triplicamos las imágenes a 3 capas, para tenerlas en formato RGB, shape(NUM,48,48) -->  shape(NUM,48,48,3)
+    images_array_np = np.broadcast_to(images_array_np[...,None],images_array_np.shape+(3,))   
+    images_original_np = images_array_np
 
-    # Triplicamos las imagenes a 3 capas, para tenerlas en formato RGB, shape(NUM,48,48) -->  shape(NUM,48,48,1)
-    images_array_np = np.broadcast_to(images_array_np[...,None],images_array_np.shape+(1,))  
+    images_train_original = images_original_np[0:NUM_TRAIN]
+    images_test_original = images_original_np[NUM_TRAIN+1:]
+
     # Guardamos el formato de entrada al modelo
     initial_inputs = Input(np.shape(images_array_np[0]))
-    
-    # FORMATO ENTRADA shape(NUM,48,48,1)  
+    images_array_np, PreTrained_Model = apply_PreTrained_model(PRE_TRAINED_MODEL,images_array_np)
+
+    # FORMATO ENTRADA shape(NUM,48,48,3)  
     # SE DIVIDE EN:
     # TRAIN
     emotion_train = emotion_array_np[0:NUM_TRAIN]
@@ -171,67 +170,31 @@ def main():
     # Eliminamos el csv inicial
     del (images_array_np, emotion_array_np)    
     
-    # Preprocesado de imágenes para crear nuevas imágenes 
-    train_datagen = ImageDataGenerator(  
-        # Inclina y estira la imagen         
-        shear_range = 0.2,
-        # Rotaciones aleatorias de 10 grados
-        rotation_range=10,
-        # Se aplica de forma aleatoria zoom en las imágenes
-        zoom_range=0.2,
-        # Algunas imágenes se girarán horizontalmente
-        horizontal_flip=True,
-        # Desplazamientos 
-        # Horizontal
-        width_shift_range=0.1,
-        # Vertical
-        height_shift_range=0.1
-    )
 
-    
-    # No hace ningún cambio, solo aplicará el nuevo formato con BATCH
-    test_datagen = ImageDataGenerator(
-        horizontal_flip=False,
-        zoom_range=0      
-    )
-    
-    data_train = train_datagen.flow(images_train, emotion_train, BATCH)
-    data_test = test_datagen.flow(images_test, emotion_test, BATCH)
-
-    # Generamos estructura secuencial, (capas apiladas) 
-    CNN_model = Sequential()
-    # Capa convolucional 1 
-    CNN_model.add(Conv2D(NUM_CONV1, kernel_size= TAM_FILTER, activation='relu', input_shape=np.shape(images_train[0])))
-
-    # Capa convolucional 2
-    CNN_model.add(Conv2D(NUM_CONV2, kernel_size= TAM_FILTER, activation='relu'))
-    CNN_model.add(MaxPooling2D(pool_size=(2, 2)))
-
-    # Capa convolucional 3
-    CNN_model.add(Conv2D(NUM_CONV3, kernel_size= TAM_FILTER, activation='relu'))
-    CNN_model.add(MaxPooling2D(pool_size=(2, 2)))
-
-    # Capa convolucional 4
-    CNN_model.add(Conv2D(NUM_CONV4, kernel_size= TAM_FILTER, activation='relu'))
-    CNN_model.add(MaxPooling2D(pool_size=(2, 2)))
-
-    # Aplanamiento de los datos
-    CNN_model.add(Flatten())
-    # RED NEURONAL MULTICAPA
+   #Construimos la red neuronal 
+    neuronal_network = Sequential()    
+            
+    #Completamos el modelo con nuestras capas
+    # Capa input
+    neuronal_network.add(Dense(256, input_shape= np.shape(images_train[0]) , activation='relu'))
+    neuronal_network.add(Dropout(0.25))
     # Capa 1
-    CNN_model.add(Dense(2048, activation='relu'))
-    CNN_model.add(Dropout(0.5))
+    neuronal_network.add(Dense(128, input_shape= (256,) , activation='relu'))
+    neuronal_network.add(Dropout(0.25))
     # Capa 2
-    CNN_model.add(Dense(1024, activation='relu'))
-    CNN_model.add(Dropout(0.5))
-    # Capa output
-    CNN_model.add(Dense(NUM_CLASSES, activation='softmax'))
+    neuronal_network.add(Dense(64, input_shape=(128,)))
+    neuronal_network.add(Dropout(0.25))
+    # Capa Out
+    neuronal_network.add(Dense(NUM_CLASSES, activation='softmax'))
+     
+    neuronal_network.compile(loss='categorical_crossentropy',
+                    optimizer=Adamax(lr= LEARNING_RATE, decay = DECAY),metrics=['accuracy'])
       
             
-    CNN_model.compile(loss='categorical_crossentropy', optimizer=Adamax(lr= LEARNING_RATE, decay= DECAY),metrics=['accuracy'])
+    neuronal_network.compile(loss='categorical_crossentropy', optimizer=Adamax(lr= LEARNING_RATE, decay= DECAY),metrics=['accuracy'])
     
-    # Gráficos a tiempo real
-    # Se define tensorboard para seguir el entrenamiento e tiempo real   
+    # Gráficos a timepo real
+    # Se define tensorboard para seguir el entrenamiento a tiempo real   
     tensorboard = tf.keras.callbacks.TensorBoard(log_dir=LOG_DIR)
 
     try:     
@@ -252,44 +215,41 @@ def main():
     callbacks = [myCallback(), tensorboard, model_checkpoint, csv_logger]
     
     # ENTRENAMIENTO
-    model_info = CNN_model.fit(
-            data_train,
+    model_info = neuronal_network.fit(
+            images_train,emotion_train,
             batch_size= BATCH,        
             epochs=EPOCH,
-            validation_data= data_test,
+            validation_data= (images_test,emotion_test),
             verbose=1,
             callbacks= callbacks
             )
     
-    # EVALUACIÓN
-    results = CNN_model.evaluate(images_test, emotion_test, batch_size=128)
+    #CONSTRUCCIÓN DEL MODELO COMPLETO  
+    neuronal_input = PreTrained_Model(initial_inputs)    
+    model_output = neuronal_network(neuronal_input)
+    
+    #Pre trained model + neuronal_network 
+    convolutional_model = Model( initial_inputs, model_output)    
+    convolutional_model.compile(loss='categorical_crossentropy', optimizer=Adamax(), metrics=['accuracy']) 
     
     # GUARDADO DE LA ESTRUCTURA Y CONFIGURACIÓN EN UN .txt
     file = open(SESSION_PATH + "info_model.txt", "w")    
-    CNN_model.summary(print_fn=lambda x: file.write(x + '\n'))    
+    convolutional_model.summary(print_fn=lambda x: file.write(x + '\n'))    
     file.write("\n\n" + "Learning rate: " + str(LEARNING_RATE) + "\nDecay: " + str(DECAY))    
     file.close()
 
-    # CREACIÓN DE LA MATRIZ DE CONFUSIÓN 
-    emotions = {0:'Enfado', 1: 'Asco', 2:'Miedo', 3:'Felicidad', 4: 'Tristeza', 5:'Sorpresa', 6:'Neutral'}
-    predictions = CNN_model.predict(images_test)
-    predictions = np.argmax(predictions, axis=1)
-    emotions_true=np.argmax(emotion_test, axis=1)        
+    #Evaluamos el modelo final 
+    results = neuronal_network.evaluate(images_test, emotion_test, batch_size=128)
     
-    conf_mat = metrics.confusion_matrix(y_true=emotions_true, y_pred=predictions) 
-    fig, ax = plot_confusion_matrix(conf_mat=conf_mat, show_normed=True,show_absolute=False, class_names=emotions.values(), figsize=(8,8))
-    matrix_name = "MATRIZ_test_images"
-    
-    # GUARDADO DEL MODELO Y FIGURA
+    # GUARDADO DEL MODELO 
     accuracy = model_info.history['accuracy']   
     epochs = str(len(accuracy))
     a = round(results[1], 3)
     accuracy_value = str(a)
 
     model_name = "model_e_"+ epochs + "-acc_" + accuracy_value +".hdf5"
-    try:
-        fig.savefig(SESSION_PATH + matrix_name)  
-        CNN_model.save(SESSION_PATH + model_name )
+    try:          
+        convolutional_model.save(SESSION_PATH + model_name )
     except Exception:
         print("Error al guardar el modelo \n", traceback.print_exc())        
     

@@ -16,8 +16,7 @@ ORANGE =    (6, 2, 0)
 PURPLE =    (4, 0, 6)
 GREY =      (57,23,18)
 
-COLORS = [GREEN, RED, BLUE, YELLOW, PINK,
-          BABY_BLUE, ORANGE, PURPLE]
+COLORS = [GREEN, RED, BLUE, YELLOW, PINK, BABY_BLUE, ORANGE, PURPLE]
 
 
 letters = {
@@ -141,11 +140,11 @@ def clean(letter, pos, np):
 
 def scroll_text(text, np, speed, color):    
     text = list(text)
-    screen = []  # Letters on the screen
+    screen = []  
     while text or screen:
         if screen:
             if (screen[0]['pos'] + screen[0]['data'][1]) <= 0:
-                # Comienza a cortarse el texto por el lado izquierdo
+                # Comienza a eliminarse el texto por el lado izquierdo
                 screen.pop(0)
             if text and ((screen[-1]['pos'] + screen[-1]['data'][1]) < 32):                
                 screen.append({'data': letters[text.pop(0)], 
@@ -176,8 +175,7 @@ def accuracy_print(acc, np):
     else:
         if (acc > 0.4):
             color = (231,76,60)
-        else:
-            #color= (211,84,0)
+        else:            
             color= (100,0,0)
 
 
@@ -190,7 +188,7 @@ def accuracy_print(acc, np):
 
 def write_text(text, np, color,border):    
     text = list(text)
-    screen = []  # Letters on the screen
+    screen = [] 
     np.fill([0,0,0])
     np.write()
     empty = True
@@ -199,19 +197,19 @@ def write_text(text, np, color,border):
         np.fill([0,0,0])
         if screen:
             if (screen[0]['pos'] <= border):
-                #Las lestras salen de la pantalla
+                # Las lestras salen de la pantalla
                 empty = False
             if text and ((screen[-1]['pos'] + screen[-1]['data'][1]) < 32):               
                 screen.append({'data': letters[text.pop(0)], 
                                'pos': 32, 
                                'color': color})
-        else:  #Se rellena la pantalla a mostrar
+        else:  # Se rellena la pantalla a mostrar
             screen.append({'data': letters[text.pop(0)], 
                            'pos':32, 
                            'color': color})
         for letter in screen:  # Imprimir pantalla
             draw_letter(letter['data'][0], letter['pos'], np, color)
-            letter['pos'] -= 1 #Desplazamiento
+            letter['pos'] -= 1 # Desplazamiento
  
     np.write()         
 
